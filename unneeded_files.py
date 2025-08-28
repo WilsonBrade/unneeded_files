@@ -1,79 +1,68 @@
 #!python3
 
-import os
-import sys 
 from pathlib import Path
 from send2trash import send2trash
+import sys
 
-
-
-
-def get_path(base_path) -> list[Path]: 
-    base_path = Path(base_path)
-
-    if not base_path.is_dir() : 
-        print("It is not a valid path for directory")
+def list_directory(path: Path) -> list[Path]:
+    """
+    Retourne la liste des fichiers contenus dans un répertoire.
+    """
+    if not path.is_dir():
+        print(f"{path} n'est pas un répertoire valide")
         sys.exit(1)
 
-    elem = [f for f in base_path.iterdir()]
+    return [f for f in path.iterdir()]
 
-    return elem
+def list_files_recursive(path: Path) -> list[Path]:
+    """
+    Retourne tous les fichiers contenus dans le chemin donné (récursif si dossier).
+    """
+    files: list[Path] = []
 
-def check_oversized(file_path : Path) -> bool:
-    size = os.path.getsize(file_path)
-    limit = 100 *(2**20) 
+    if path.is_dir():
+        for root, _, filenames in os.walk(path):
+            root_path = Path(root)
+            for file in filenames:
+                files.append(root_path / file)
+    else:
+        files.append(path)
 
-    if size > limit : 
-        return True
-     
-    return False
+    return files
 
+def is_oversized(file_path: Path, limit_mb: int = 100) -> bool:
+    """
+    Vérifie si un fichier dépasse la taille limite (par défaut 100 MB)
+    """
+    size = file_path.stat().st_size
+    limit_bytes = limit_mb * (2 ** 20)
+    return size > limit_bytes
 
-def list_files_in_path(path : Path) -> list[Path] : 
-    paths = []
-    if path.is_dir() : 
-        for root, subfolders, files in os.walk(path) : 
-            for file in files:
-                paths.append(Path(os.path.join(root, file)))
-
-        return paths
-    
-    paths.append(Path(path))
-    return paths
-
-
-def delete(file_path : Path) -> None:
-    try :  
+def move_to_trash(file_path: Path) -> None:
+    """
+    Envoie un fichier à la corbeille.
+    """
+    try:
         send2trash(file_path)
-    except Exception as e : 
-        print(f"Error : {e}")
+    except Exception as e:
+        print(f"Erreur lors de la suppression de {file_path}: {e}")
 
-
-
-def main() : 
-
-    if len(sys.argv) < 2 : 
-        print("Usage : python unneeded_files [path]")
+def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: python unneeded_files.py [path]")
         sys.exit(1)
-    
 
-    base_path = sys.argv[1]
+    base_path = Path(sys.argv[1])
+    entries = list_directory(base_path)
 
-    elem = get_path(base_path)
+    try:
+        for entry in entries:
+            for file_path in list_files_recursive(entry):
+                if is_oversized(file_path):
+                    move_to_trash(file_path)
+    except Exception as e:
+        print(f"Erreur générale: {e}")
 
-    try : 
-        for e in elem : 
-
-            for path in list_files_in_path(e) : 
-                if check_oversized(path) : 
-                    delete(path)
-
-    except Exception as e : 
-        print(f"Error: {e}")
-
-
-
-
-
-
-
+if __name__ == "__main__":
+    import os
+    main()
